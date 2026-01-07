@@ -1,8 +1,18 @@
 # SchemaCanvas
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black)](https://nextjs.org/)
+[![React Flow](https://img.shields.io/badge/React%20Flow-12-blue)](https://reactflow.dev/)
+
+
 **A visual, validation-first database schema designer for PostgreSQL & Prisma.**
 
 SchemaCanvas is a developer-focused tool for designing relational database schemas with an intuitive drag-and-drop interface. Unlike generic diagramming tools, SchemaCanvas enforces strict validation rules to ensure that the output—whether PostgreSQL SQL or Prisma schema—is always syntactically correct and follow architectural best practices.
+
+![SchemaCanvas Screenshot 1](./public/screencapture1.png)
+![SchemaCanvas Screenshot 2](./public/screencapture2.png)
+
 
 ## Why SchemaCanvas Exists
 

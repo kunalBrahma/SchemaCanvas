@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { Toaster, toast } from "sonner";
+import { toast } from "sonner";
 
 interface Project {
   id: string;
@@ -18,6 +18,9 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [projectName, setProjectName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
+  const [updating, setUpdating] = useState(false);
 
   useEffect(() => {
     fetchProjects();
@@ -34,6 +37,38 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleUpdateProjectName = async (projectId: string) => {
+    if (!editingName.trim()) {
+      toast.error('Project name cannot be empty');
+      return;
+    }
+
+    setUpdating(true);
+    try {
+      const response = await fetch(`/api/projects/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: editingName.trim() }),
+      });
+
+      if (!response.ok) throw new Error('Failed to update project');
+
+      toast.success('Project renamed');
+      setEditingId(null);
+      fetchProjects();
+    } catch (error) {
+      console.error('Error updating project:', error);
+      toast.error('Failed to update project');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const startEditing = (project: Project) => {
+    setEditingId(project.id);
+    setEditingName(project.name);
   };
 
   const handleQuickStart = () => {
@@ -96,22 +131,6 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
-      <Toaster
-        position="top-center"
-        richColors
-        toastOptions={{
-          style: {
-            background: 'var(--toast-bg)',
-            color: 'var(--toast-text)',
-            border: '1px solid var(--toast-border)',
-            borderRadius: '0.5rem',
-            padding: '1rem',
-            fontSize: '0.875rem',
-            fontWeight: '500',
-          },
-        }}
-      />
-
       {/* Header */}
       <header className="border-b border-white/5">
         <div className="max-w-6xl mx-auto px-6 py-6 flex items-center justify-between">
@@ -202,9 +221,55 @@ export default function HomePage() {
               {projects.map((project) => (
                 <div
                   key={project.id}
-                  className="grid grid-cols-[1fr,auto,auto,auto] gap-4 px-4 py-4 border-b border-white/5 hover:bg-white/[0.02] transition-colors group"
+                  className="grid grid-cols-[1fr,auto,auto,auto] gap-4 px-4 py-4 border-b border-white/5 hover:bg-white/[0.02] transition-colors group items-center"
                 >
-                  <div className="font-medium truncate">{project.name}</div>
+                  <div className="font-medium truncate">
+                    {editingId === project.id ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={editingName}
+                          onChange={(e) => setEditingName(e.target.value)}
+                          className="flex-1 px-2 py-1 bg-white/10 border border-white/20 rounded focus:outline-none focus:ring-1 focus:ring-white/30 text-sm"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleUpdateProjectName(project.id);
+                            if (e.key === 'Escape') setEditingId(null);
+                          }}
+                        />
+                        <button
+                          onClick={() => handleUpdateProjectName(project.id)}
+                          disabled={updating}
+                          className="p-1 hover:text-green-400 transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => setEditingId(null)}
+                          disabled={updating}
+                          className="p-1 hover:text-red-400 transition-colors"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        {project.name}
+                        <button
+                          onClick={() => startEditing(project)}
+                          className="opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-gray-300 transition-all"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   <div className="text-gray-400 text-sm text-right w-32">
                     {new Date(project.updatedAt).toLocaleDateString()}
                   </div>

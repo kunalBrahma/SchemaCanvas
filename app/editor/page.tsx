@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useState, useEffect, Suspense } from 'react';
+import React, { useCallback, useState, useEffect, Suspense, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
     ReactFlow,
@@ -19,7 +19,7 @@ import {
     MarkerType,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Toaster, toast } from 'sonner';
+import { toast } from "sonner";
 
 import TableNode, { TableNodeData } from '@/components/TableNode';
 import ExportPanel from '@/components/ExportPanel';
@@ -56,6 +56,7 @@ function EditorPageContent() {
 
     // Saved positions for restoration (keyed by table ID)
     const [savedPositions, setSavedPositions] = useState<{ [tableId: string]: { x: number; y: number } } | null>(null);
+    const hasLoadedRef = useRef(false);
 
     // Sync Zustand tables to React Flow nodes
     useEffect(() => {
@@ -301,7 +302,8 @@ function EditorPageContent() {
     // Auto-load from URL parameter
     useEffect(() => {
         const urlProjectId = searchParams.get('projectId');
-        if (urlProjectId && !projectId && tables.length === 0) {
+        if (urlProjectId && !projectId && tables.length === 0 && !hasLoadedRef.current) {
+            hasLoadedRef.current = true;
             const loadProject = async () => {
                 try {
                     const response = await fetch(`/api/projects/${urlProjectId}`);
@@ -335,6 +337,7 @@ function EditorPageContent() {
                     });
                 } catch (error) {
                     console.error('Load error:', error);
+                    hasLoadedRef.current = false; // Reset on error to allow retry if needed
                     toast.error('Failed to load project', {
                         description: error instanceof Error ? error.message : 'Unknown error',
                         duration: 5000,
@@ -491,23 +494,7 @@ function EditorPageContent() {
     }, [selectedEdgeId, relations, tables, updateRelation]);
 
     return (
-        <div className="h-screen w-screen">
-            <Toaster
-                position="top-center"
-                richColors
-                toastOptions={{
-                    style: {
-                        background: 'var(--toast-bg)',
-                        color: 'var(--toast-text)',
-                        border: '1px solid var(--toast-border)',
-                        borderRadius: '0.5rem',
-                        padding: '1rem',
-                        fontSize: '0.875rem',
-                        fontWeight: '500',
-                    },
-                    className: 'dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700',
-                }}
-            />
+        <div className="h-screen flex flex-col bg-white dark:bg-gray-950">
             <ReactFlow
                 nodes={nodes}
                 edges={edges.map((edge) => ({
@@ -707,15 +694,15 @@ function EditorPageContent() {
                                         To (Target)
                                     </label>
                                     <select
-                                        value={`${relation.toTableId}::${relation.toColumnId}`}
+                                        value={`${relation.toTableId}:: ${relation.toColumnId}`}
                                         onChange={(e) => handleUpdateTargetColumn(e.target.value)}
                                         className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
                                     >
                                         {tables.map((table: Table) =>
                                             table.columns.map((column: Column) => (
                                                 <option
-                                                    key={`${table.id}::${column.id}`}
-                                                    value={`${table.id}::${column.id}`}
+                                                    key={`${table.id}:: ${column.id}`}
+                                                    value={`${table.id}:: ${column.id}`}
                                                 >
                                                     {table.name}.{column.name}
                                                 </option>
@@ -749,15 +736,15 @@ function EditorPageContent() {
 
                 {/* Instructions Panel - Minimal Design */}
                 {!selectedEdgeId && (
-                    <div className="absolute bottom-4 right-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-lg shadow-sm z-10 border border-gray-200 dark:border-gray-700 w-80">
+                    <div className="absolute bottom-4 right-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm rounded-lg shadow-sm z-10 border border-gray-200 dark:border-gray-700 w-64">
                         <button
                             onClick={() => setInstructionsExpanded(!instructionsExpanded)}
-                            className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors rounded-t-lg"
+                            className="w-full px-3 py-2 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors rounded-t-lg"
                         >
                             <div className="flex items-center gap-2">
                                 <svg
                                     xmlns="http://www.w3.org/2000/svg"
-                                    className="h-4 w-4 text-gray-500 dark:text-gray-400"
+                                    className="h-3.5 w-3.5 text-gray-500 dark:text-gray-400"
                                     viewBox="0 0 20 20"
                                     fill="currentColor"
                                 >
@@ -767,11 +754,11 @@ function EditorPageContent() {
                                         clipRule="evenodd"
                                     />
                                 </svg>
-                                <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300">Quick Guide</h3>
+                                <h3 className="font-medium text-xs text-gray-700 dark:text-gray-300">Quick Guide</h3>
                             </div>
                             <svg
                                 xmlns="http://www.w3.org/2000/svg"
-                                className={`h-4 w-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${instructionsExpanded ? 'rotate-180' : ''}`}
+                                className={`h-3.5 w-3.5 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${instructionsExpanded ? 'rotate-180' : ''}`}
                                 viewBox="0 0 20 20"
                                 fill="currentColor"
                             >
@@ -783,39 +770,39 @@ function EditorPageContent() {
                             </svg>
                         </button>
                         {instructionsExpanded && (
-                            <div className="px-4 pb-4 pt-2 border-t border-gray-100 dark:border-gray-700">
-                                <div className="space-y-3">
+                            <div className="px-3 pb-3 pt-1 border-t border-gray-100 dark:border-gray-700">
+                                <div className="space-y-2.5">
                                     {/* Instructions */}
-                                    <ul className="space-y-2 text-xs text-gray-600 dark:text-gray-400">
-                                        <li className="flex items-start gap-2">
+                                    <ul className="space-y-1.5 text-[10px] text-gray-600 dark:text-gray-400">
+                                        <li className="flex items-start gap-1.5">
                                             <span className="text-gray-400 dark:text-gray-500 mt-0.5">•</span>
-                                            <span><strong className="text-gray-700 dark:text-gray-300 font-medium">Tables:</strong> Click "Add Table" to create new tables</span>
+                                            <span><strong className="text-gray-700 dark:text-gray-300 font-medium">Tables:</strong> "Add Table" to create</span>
                                         </li>
-                                        <li className="flex items-start gap-2">
+                                        <li className="flex items-start gap-1.5">
                                             <span className="text-gray-400 dark:text-gray-500 mt-0.5">•</span>
-                                            <span><strong className="text-gray-700 dark:text-gray-300 font-medium">Relationships:</strong> Drag from Primary Key columns to other columns</span>
+                                            <span><strong className="text-gray-700 dark:text-gray-300 font-medium">Relations:</strong> Drag PK to target</span>
                                         </li>
-                                        <li className="flex items-start gap-2">
+                                        <li className="flex items-start gap-1.5">
                                             <span className="text-gray-400 dark:text-gray-500 mt-0.5">•</span>
-                                            <span><strong className="text-gray-700 dark:text-gray-300 font-medium">Export:</strong> Use the right panel for SQL/Prisma schema</span>
+                                            <span><strong className="text-gray-700 dark:text-gray-300 font-medium">Export:</strong> See right panel</span>
                                         </li>
                                     </ul>
 
                                     {/* Column Badges */}
-                                    <div className="pt-3 border-t border-gray-100 dark:border-gray-700">
-                                        <h4 className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Column Badges:</h4>
-                                        <ul className="space-y-2 text-xs text-gray-600 dark:text-gray-400">
-                                            <li className="flex items-center gap-2">
-                                                <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">PK</span>
-                                                <span><strong className="text-gray-700 dark:text-gray-300">Primary Key</strong> - Unique identifier</span>
+                                    <div className="pt-2 border-t border-gray-100 dark:border-gray-700">
+                                        <h4 className="text-[10px] font-medium text-gray-700 dark:text-gray-300 mb-1.5">Column Badges:</h4>
+                                        <ul className="space-y-1.5 text-[10px] text-gray-600 dark:text-gray-400">
+                                            <li className="flex items-center gap-1.5">
+                                                <span className="px-1 py-0.5 text-[9px] font-medium rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">PK</span>
+                                                <span><strong className="text-gray-700 dark:text-gray-300">Primary Key</strong></span>
                                             </li>
-                                            <li className="flex items-center gap-2">
-                                                <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400">N</span>
-                                                <span><strong className="text-gray-700 dark:text-gray-300">Nullable</strong> - Can be empty</span>
+                                            <li className="flex items-center gap-1.5">
+                                                <span className="px-1 py-0.5 text-[9px] font-medium rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400">N</span>
+                                                <span><strong className="text-gray-700 dark:text-gray-300">Nullable</strong></span>
                                             </li>
-                                            <li className="flex items-center gap-2">
-                                                <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">U</span>
-                                                <span><strong className="text-gray-700 dark:text-gray-300">Unique</strong> - Must be unique</span>
+                                            <li className="flex items-center gap-1.5">
+                                                <span className="px-1 py-0.5 text-[9px] font-medium rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">U</span>
+                                                <span><strong className="text-gray-700 dark:text-gray-300">Unique</strong></span>
                                             </li>
                                         </ul>
                                     </div>
