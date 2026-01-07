@@ -28,7 +28,7 @@ export default function HomePage() {
 
   const fetchProjects = async () => {
     try {
-      const response = await fetch('/api/projects');
+      const response = await fetch('/api/projects', { cache: 'no-store' });
       if (!response.ok) throw new Error('Failed to fetch projects');
       const data = await response.json();
       setProjects(data);
@@ -115,17 +115,25 @@ export default function HomePage() {
       return;
     }
 
+    // Optimistic update: remove immediately
+    setProjects(current => current.filter(p => p.id !== projectId));
+
     try {
       const response = await fetch(`/api/projects/${projectId}`, {
         method: 'DELETE',
       });
 
-      if (!response.ok) throw new Error('Failed to delete project');
+      if (!response.ok) {
+        throw new Error('Failed to delete project');
+      }
 
       toast.success('Project deleted');
-      fetchProjects();
+      // No need to re-fetch if optimistic update worked, but can do so to be safe
+      // fetchProjects(); 
     } catch (error) {
       toast.error('Failed to delete project');
+      // Rollback if failed
+      fetchProjects();
     }
   };
 

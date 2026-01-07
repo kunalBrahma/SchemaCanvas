@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useCallback, useState, useEffect, Suspense, useRef } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import {
     ReactFlow,
     Background,
@@ -36,6 +36,7 @@ const nodeTypes = {
 function EditorPageContent() {
     const { tables, relations, addTable, addRelation, updateRelation, removeRelation, getNormalizedSchema, loadSchema, setNormalized } = useSchemaStore();
     const searchParams = useSearchParams();
+    const router = useRouter(); // Use App Router
 
     // Local state for React Flow nodes/edges (enables dragging)
     const [nodes, setNodes] = useState<Node<TableNodeData>[]>([]);
@@ -107,10 +108,12 @@ function EditorPageContent() {
 
     // Sync Zustand relations to React Flow edges with improved styling
     // Only create edges if both source and target nodes exist
+    // Sync Zustand relations to React Flow edges with improved styling
+    // Only create edges if both source and target tables exist
     useEffect(() => {
-        const nodeIds = new Set(nodes.map((n: Node<TableNodeData>) => n.id));
+        const tableIds = new Set(tables.map((t) => t.id));
         const validEdges = relations
-            .filter((rel: Relation) => nodeIds.has(rel.fromTableId) && nodeIds.has(rel.toTableId))
+            .filter((rel: Relation) => tableIds.has(rel.fromTableId) && tableIds.has(rel.toTableId))
             .map((relation: Relation) => ({
                 id: relation.id,
                 source: relation.fromTableId,
@@ -131,7 +134,7 @@ function EditorPageContent() {
                 },
             }));
         setEdges(validEdges);
-    }, [relations, nodes]);
+    }, [relations, tables]);
 
     const handleAddTable = useCallback(() => {
         addTable();
@@ -234,7 +237,7 @@ function EditorPageContent() {
             setShowProjectList(true);
             setLoadingProjects(true);
             try {
-                const response = await fetch('/api/projects');
+                const response = await fetch('/api/projects', { cache: 'no-store' });
                 if (!response.ok) {
                     throw new Error('Failed to fetch projects');
                 }
@@ -252,44 +255,11 @@ function EditorPageContent() {
             return;
         }
 
-        try {
-            const response = await fetch(`/api/projects/${id}`);
-            if (!response.ok) {
-                if (response.status === 404) {
-                    throw new Error('Project not found');
-                }
-                throw new Error('Failed to load project');
-            }
-
-            const project = await response.json();
-            const schema = project.schema as NormalizedSchema;
-
-            // Denormalize and load into store
-            const { tables: loadedTables, relations: loadedRelations, positions: loadedPositions } = denormalizeSchema(schema);
-            loadSchema(loadedTables, loadedRelations);
-
-            // Store positions for restoration (will be used by node sync useEffect)
-            if (loadedPositions) {
-                setSavedPositions(loadedPositions);
-            } else {
-                setSavedPositions(null);
-            }
-
-            setProjectId(project.id);
-            setProjectName(project.name);
-            setShowProjectList(false); // Close modal after loading
-            toast.success('Project loaded successfully!', {
-                description: project.name,
-                duration: 3000,
-            });
-        } catch (error) {
-            console.error('Load error:', error);
-            toast.error('Failed to load project', {
-                description: error instanceof Error ? error.message : 'Unknown error',
-                duration: 5000,
-            });
-        }
-    }, [loadSchema]);
+        // Update URL to trigger the loading effect
+        // Using router.push is cleaner and integrates with Next.js navigation
+        router.push(`/editor?projectId=${id}`);
+        setShowProjectList(false);
+    }, [router]);
 
     const handleNewProject = useCallback(() => {
         loadSchema([], []);
@@ -300,54 +270,75 @@ function EditorPageContent() {
     }, [loadSchema]);
 
     // Auto-load from URL parameter
+    // Auto-load from URL parameter
+    const loadingRef = useRef<string | null>(null);
+
     useEffect(() => {
         const urlProjectId = searchParams.get('projectId');
-        if (urlProjectId && !projectId && tables.length === 0 && !hasLoadedRef.current) {
-            hasLoadedRef.current = true;
-            const loadProject = async () => {
-                try {
-                    const response = await fetch(`/api/projects/${urlProjectId}`);
-                    if (!response.ok) {
-                        if (response.status === 404) {
-                            toast.error('Project not found');
-                            return;
+
+        // Case 1: URL has a project ID
+        if (urlProjectId) {
+            // Prevent double loading if we're already fetching this ID
+            if (loadingRef.current === urlProjectId) return;
+
+            // Only load if it's different from what's currently loaded
+            if (urlProjectId !== projectId) {
+                loadingRef.current = urlProjectId;
+
+                // IMMEDIATE FIX: Clear existing state to prevent "flash" of old project
+                loadSchema([], []);
+                setProjectId(null); // Reset ID temporarily
+                setProjectName('Loading...'); // UI indicator
+
+                const loadProject = async () => {
+                    try {
+                        const response = await fetch(`/api/projects/${urlProjectId}`, { cache: 'no-store' });
+                        if (!response.ok) {
+                            if (response.status === 404) {
+                                toast.error('Project not found');
+                                return;
+                            }
+                            throw new Error('Failed to load project');
                         }
-                        throw new Error('Failed to load project');
+
+                        const project = await response.json();
+                        const schema = project.schema as NormalizedSchema;
+
+                        // Denormalize and load into store
+                        const { tables: loadedTables, relations: loadedRelations, positions: loadedPositions } = denormalizeSchema(schema);
+                        loadSchema(loadedTables, loadedRelations);
+
+                        // Store positions for restoration (will be used by node sync useEffect)
+                        if (loadedPositions) {
+                            setSavedPositions(loadedPositions);
+                        } else {
+                            setSavedPositions(null);
+                        }
+
+                        setProjectId(project.id);
+                        setProjectName(project.name);
+                        toast.success('Project loaded successfully!', {
+                            description: project.name,
+                            duration: 3000,
+                        });
+                    } catch (error) {
+                        console.error('Load error:', error);
+                        toast.error('Failed to load project', {
+                            description: error instanceof Error ? error.message : 'Unknown error',
+                            duration: 5000,
+                        });
+                    } finally {
+                        loadingRef.current = null;
                     }
-
-                    const project = await response.json();
-                    const schema = project.schema as NormalizedSchema;
-
-                    // Denormalize and load into store
-                    const { tables: loadedTables, relations: loadedRelations, positions: loadedPositions } = denormalizeSchema(schema);
-                    loadSchema(loadedTables, loadedRelations);
-
-                    // Store positions for restoration (will be used by node sync useEffect)
-                    if (loadedPositions) {
-                        setSavedPositions(loadedPositions);
-                    } else {
-                        setSavedPositions(null);
-                    }
-
-                    setProjectId(project.id);
-                    setProjectName(project.name);
-                    toast.success('Project loaded successfully!', {
-                        description: project.name,
-                        duration: 3000,
-                    });
-                } catch (error) {
-                    console.error('Load error:', error);
-                    hasLoadedRef.current = false; // Reset on error to allow retry if needed
-                    toast.error('Failed to load project', {
-                        description: error instanceof Error ? error.message : 'Unknown error',
-                        duration: 5000,
-                    });
-                }
-            };
-            loadProject();
+                };
+                loadProject();
+            }
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [searchParams]);
+        // Case 2: No project ID in URL -> New Project Mode
+        else if (projectId !== null) {
+            handleNewProject();
+        }
+    }, [searchParams, projectId, loadSchema, handleNewProject]);
 
     // Enable node dragging
     const onNodesChange: OnNodesChange = useCallback((changes) => {
@@ -497,15 +488,21 @@ function EditorPageContent() {
         <div className="h-screen flex flex-col bg-white dark:bg-gray-950">
             <ReactFlow
                 nodes={nodes}
-                edges={edges.map((edge) => ({
-                    ...edge,
-                    selected: edge.id === selectedEdgeId,
-                    style: {
-                        ...edge.style,
-                        stroke: edge.id === selectedEdgeId ? '#1d4ed8' : '#3b82f6',
-                        strokeWidth: edge.id === selectedEdgeId ? 3 : 2,
-                    },
-                }))}
+                edges={edges.map((edge) => {
+                    const isSelected = edge.id === selectedEdgeId;
+                    // Only creating new object if selection status changes effectively
+                    // But for now, map is fine as long as useEffect doesn't loop.
+                    return {
+                        ...edge,
+                        selected: isSelected,
+                        style: {
+                            ...edge.style,
+                            stroke: isSelected ? '#1d4ed8' : '#3b82f6',
+                            strokeWidth: isSelected ? 3 : 2,
+                        },
+                        zIndex: isSelected ? 10 : 0,
+                    };
+                })}
                 nodeTypes={nodeTypes as unknown as NodeTypes}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
